@@ -1,0 +1,1 @@
+{"name":"oneteam-workspace","version":"1.0.0","private":true,"scripts":{"test":"node test-online.cjs","check":"node --check public/online.js"},"devDependencies":{"jsdom":"26.1.0"}}
