@@ -127,5 +127,4 @@ cloud.auth.onAuthStateChange((event,session)=>{
 window.addEventListener('online',()=>{if(cloudSession)cloudGetMessages(channel).then(cloudPaint).catch(cloudError)});
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&cloudSession)cloudGetMessages(channel).then(cloudPaint).catch(cloudError)});
 user=null;state.messages=[];state.session=null;render();
-cloud.auth.getSession().then(async({data:{session},error})=>{if(error)throw error;if(session){const {error:verify}=await cloud.auth.getUser();if(verify)throw verify;await cloudEnter(session)}}).catch(e=>{cloudSession=null;user=null;render();cloudError(e)});
-
+function bootOnline(){return cloud.auth.getSession().then(async({data:{session},error})=>{if(error)throw error;if(session){const {error:verify}=await cloud.auth.getUser();if(verify)throw verify;await cloudEnter(session)}}).catch(e=>{cloudSession=null;user=null;render();cloudError(e)});}

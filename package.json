@@ -1,1 +1,12 @@
-{"name":"oneteam-workspace","version":"1.0.0","private":true,"scripts":{"test":"node test-online.cjs","check":"node --check public/online.js"},"devDependencies":{"jsdom":"26.1.0"}}
+{
+  "name": "oneteam-workspace",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "node test-online.cjs && node test-full-sync.cjs",
+    "check": "node --check public/online.js && node --check public/workspace-sync.js"
+  },
+  "devDependencies": {
+    "jsdom": "26.1.0"
+  }
+}

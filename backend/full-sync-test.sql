@@ -1,0 +1,53 @@
+begin;
+insert into private.directory(email,worker_id,name,company,role) values('qa-full-admin@oneteam.invalid','qa_full_admin','QA Admin','deed','admin'),('qa-full-worker@oneteam.invalid','qa_full_worker','QA Worker','deed','worker'),('qa-full-third@oneteam.invalid','qa_full_third','QA Third','sks','worker');
+insert into auth.users(id,email,aud,role) values('31000000-0000-4000-8000-000000000001','qa-full-admin@oneteam.invalid','authenticated','authenticated'),('31000000-0000-4000-8000-000000000002','qa-full-worker@oneteam.invalid','authenticated','authenticated'),('31000000-0000-4000-8000-000000000003','qa-full-third@oneteam.invalid','authenticated','authenticated');
+set local role authenticated;
+select set_config('request.jwt.claims','{"sub":"31000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+select public.workspace_save('board','qa-board','{"id":"qa-board","name":"QA","company":"deed"}','deed','qa_full_admin',0,false);
+insert into public.workplace_offices(company,name,lat,lng,radius,enforce_gps) values('japan','QA office',47,106,200,false);
+select set_config('request.jwt.claims','{"sub":"31000000-0000-4000-8000-000000000002","role":"authenticated"}',true);
+select public.workspace_save('task','1900000000099','{"id":1900000000099,"owner":"qa_full_worker","title":"QA task"}','deed','qa_full_worker',0,false);
+select public.workspace_save('board','qa-board','{"id":"qa-board","name":"Shared change","company":"deed"}','deed','qa_full_admin',1,false);
+insert into public.feed_posts(id,author_id,company,title,body) values('qa-full-post',auth.uid(),'deed','QA','Shared post');
+insert into public.feed_likes(post_id,owner_id) values('qa-full-post',auth.uid());
+insert into public.feed_comments(post_id,owner_id,body) values('qa-full-post',auth.uid(),'QA comment');
+select public.attendance_punch('in',null);
+do $$begin
+ begin perform public.attendance_punch('in',null);raise exception 'Duplicate check-in allowed';exception when raise_exception then if sqlerrm not like 'Attendance changed%' then raise;end if;end;
+ begin perform public.workspace_save('task','1900000000099','{"id":1900000000099,"owner":"qa_full_worker","title":"Stale"}','deed','qa_full_worker',0,false);raise exception 'Duplicate task allowed';exception when unique_violation then null;end;
+ begin perform public.workspace_save('task','1900000000099','{"id":1900000000099,"owner":"qa_full_worker","title":"Stale"}','deed','qa_full_worker',9,false);raise exception 'Stale overwrite allowed';exception when raise_exception then if sqlerrm not like 'CONFLICT:%' then raise;end if;end;
+ begin insert into public.feed_posts(id,author_id,company,body) values('qa-spoof','31000000-0000-4000-8000-000000000001','deed','spoof');raise exception 'Post spoof allowed';exception when insufficient_privilege then null;end;
+ begin insert into public.feed_posts(id,author_id,company,body,pinned) values('qa-pin',auth.uid(),'deed','fake admin',true);raise exception 'Pin bypass allowed';exception when insufficient_privilege then null;end;
+ begin update public.attendance_logs set clock_in=now()-interval '8 hours' where owner_id=auth.uid();raise exception 'Attendance timestamp spoof allowed';exception when insufficient_privilege then null;end;
+ begin perform public.workspace_employee(auth.uid(),'Fake Admin','sks');raise exception 'Company change bypass allowed';exception when raise_exception then if sqlerrm<>'Administrator required' then raise;end if;end;
+ if not exists(select 1 from public.attendance_logs where owner_id=auth.uid() and clock_in>now()-interval '1 minute' and source='server') then raise exception 'Server timestamp failed';end if;
+end $$;
+select public.attendance_punch('out',null);
+reset role;
+insert into public.workplace_offices(company,name,lat,lng,radius,enforce_gps) values('deed','QA rollback GPS',47,106,200,true) on conflict(company) do update set lat=47,lng=106,radius=200,enforce_gps=true;
+set local role authenticated;
+do $$begin
+ begin perform public.attendance_punch('in',null);raise exception 'GPS absence accepted';exception when raise_exception then if sqlerrm not like 'Оффисын GPS%' then raise;end if;end;
+ begin perform public.attendance_punch('in','{"lat":48,"lng":106,"accuracy":5}');raise exception 'Outside GPS accepted';exception when raise_exception then if sqlerrm not like 'Оффисын GPS%' then raise;end if;end;
+ perform public.attendance_punch('in','{"lat":47,"lng":106,"accuracy":5}');
+ perform public.attendance_punch('out','{"lat":47,"lng":106,"accuracy":5}');
+end $$;
+insert into public.attendance_requests(id,owner_id,company,body) values('32000000-0000-4000-8000-000000000001',auth.uid(),'deed','{"kind":"leave","start":"2026-11-24","end":"2026-11-24","reason":"QA leave request"}');
+do $$begin begin perform public.attendance_review('32000000-0000-4000-8000-000000000001','approved','');raise exception 'Worker self-approval allowed';exception when raise_exception then if sqlerrm<>'Administrator required' then raise;end if;end;end $$;
+select set_config('request.jwt.claims','{"sub":"31000000-0000-4000-8000-000000000003","role":"authenticated"}',true);
+do $$begin
+ if not exists(select 1 from public.feed_posts where id='qa-full-post') then raise exception 'Cross-company feed not shared';end if;
+ if not exists(select 1 from public.feed_comments where post_id='qa-full-post') then raise exception 'Comments not shared';end if;
+ if exists(select 1 from public.attendance_logs where owner_id='31000000-0000-4000-8000-000000000002') then raise exception 'Private attendance leaked';end if;
+ begin perform public.workspace_save('task','1900000000099','{"id":1900000000099,"owner":"qa_full_worker","title":"attack"}','deed','qa_full_worker',1,false);raise exception 'Other employee task edit allowed';exception when raise_exception then if sqlerrm not like 'CONFLICT:%' then raise;end if;end;
+end $$;
+insert into public.feed_likes(post_id,owner_id) values('qa-full-post',auth.uid());
+select set_config('request.jwt.claims','{"sub":"31000000-0000-4000-8000-000000000001","role":"authenticated"}',true);
+select public.attendance_review('32000000-0000-4000-8000-000000000001','approved','QA approved');
+do $$begin
+ if (select count(*) from public.feed_likes where post_id='qa-full-post')<>2 then raise exception 'Concurrent likes lost';end if;
+ if not exists(select 1 from public.attendance_requests where id='32000000-0000-4000-8000-000000000001' and status='approved') then raise exception 'Review not persisted';end if;
+end $$;
+reset role;
+rollback;
+select 'PASS: shared posts/comments/likes and boards, version conflicts, owner authorization, server timestamps, duplicate-punch protection, attendance privacy, request approval' as result;

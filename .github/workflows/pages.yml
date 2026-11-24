@@ -33,6 +33,7 @@ jobs:
       - name: Validate JavaScript syntax
         run: |
           node --check public/online.js
+          node --check public/workspace-sync.js
           node --input-type=module <<'JS'
           import fs from 'node:fs';
           import vm from 'node:vm';
