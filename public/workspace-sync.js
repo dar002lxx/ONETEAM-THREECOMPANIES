@@ -84,4 +84,5 @@ const fullEnterWithClock=cloudEnter;cloudEnter=async function(session){const sen
 attendanceElapsed=function(){const a=activeClock();return a?Math.max(0,Math.floor((Date.now()+fullServerOffset-a.in)/60000)):0;};
 assignStaff=async function(id,company){if(!isAdmin())return;const p=people.find(p=>p.id===id);if(!p)return;try{const {error}=await cloud.rpc('workspace_employee',{p_id:p.authId,p_name:p.name,p_company:company});if(error)throw error;await cloudDirectory();user=people.find(p=>p.authId===cloudSession.user.id);render();}catch(e){cloudError(e)}};
 const fullShiftBase=saveShift;saveShift=async function(id,f){if(!isAdmin())return;const p=people.find(p=>p.id===id);try{const {error}=await cloud.rpc('workspace_employee',{p_id:p.authId,p_name:f.fullName.value.trim(),p_company:assignedCompany(id)});if(error)throw error;fullShiftBase(id,f);await fullFlush();await cloudDirectory();user=people.find(p=>p.authId===cloudSession.user.id);}catch(e){cloudError(e)}};
+fullStatus();
 bootOnline();
